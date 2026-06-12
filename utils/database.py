@@ -4,16 +4,10 @@ import uuid
 from typing import Optional
 
 @st.cache_resource
-def init_connection() -> Client:
+def get_supabase() -> Client:
     url = st.secrets["SUPABASE_URL"]
     key = st.secrets["SUPABASE_KEY"]
     return create_client(url, key)
-
-# Create a global instance
-try:
-    supabase = init_connection()
-except Exception as e:
-    supabase = None
 
 def init_db():
     # In Supabase, the schema is managed via the SQL Editor online.
@@ -30,19 +24,19 @@ def create_user(email: str, password_hash: str, full_name: str) -> str:
         "password_hash": password_hash,
         "full_name": full_name
     }
-    supabase.table("users").insert(data).execute()
+    get_supabase().table("users").insert(data).execute()
     return uid
 
 def get_user_by_email(email: str) -> Optional[dict]:
-    response = supabase.table("users").select("*").eq("email", email).execute()
+    response = get_supabase().table("users").select("*").eq("email", email).execute()
     return response.data[0] if response.data else None
 
 def get_user_by_id(user_id: str) -> Optional[dict]:
-    response = supabase.table("users").select("*").eq("id", user_id).execute()
+    response = get_supabase().table("users").select("*").eq("id", user_id).execute()
     return response.data[0] if response.data else None
 
 def update_user(user_id: str, **fields):
-    supabase.table("users").update(fields).eq("id", user_id).execute()
+    get_supabase().table("users").update(fields).eq("id", user_id).execute()
 
 # ── Sent Emails ───────────────────────────────────────────
 
@@ -60,15 +54,15 @@ def save_sent_email(user_id: str, to_email: str, to_name: str, company: str,
         "body": body,
         "gmail_message_id": message_id
     }
-    supabase.table("sent_emails").insert(data).execute()
+    get_supabase().table("sent_emails").insert(data).execute()
     return eid
 
 def get_sent_emails(user_id: str) -> list[dict]:
-    response = supabase.table("sent_emails").select("*").eq("user_id", user_id).order("sent_at", desc=True).execute()
+    response = get_supabase().table("sent_emails").select("*").eq("user_id", user_id).order("sent_at", desc=True).execute()
     return response.data
 
 def get_email_by_message_id(message_id: str) -> Optional[dict]:
-    response = supabase.table("sent_emails").select("*").eq("gmail_message_id", message_id).execute()
+    response = get_supabase().table("sent_emails").select("*").eq("gmail_message_id", message_id).execute()
     return response.data[0] if response.data else None
 
 # ── Email Replies ─────────────────────────────────────────
@@ -83,12 +77,12 @@ def save_reply(sent_email_id: str, from_email: str, subject: str, body: str, cla
         "body": body,
         "classification": classification
     }
-    supabase.table("email_replies").insert(data).execute()
+    get_supabase().table("email_replies").insert(data).execute()
     return rid
 
 def get_replies(user_id: str) -> list[dict]:
     # 1. Fetch all sent emails for this user to get their IDs
-    emails_response = supabase.table("sent_emails").select("id, company, to_email").eq("user_id", user_id).execute()
+    emails_response = get_supabase().table("sent_emails").select("id, company, to_email").eq("user_id", user_id).execute()
     emails = emails_response.data
     if not emails:
         return []
@@ -97,13 +91,11 @@ def get_replies(user_id: str) -> list[dict]:
     email_ids = list(email_dict.keys())
     
     # 2. Fetch all replies that map to these sent_email_ids
-    # Note: Supabase limits in_ queries to a certain size, but for a personal copilot it's fine.
-    # To be perfectly safe, we chunk it if it's huge, but a single user won't hit the limit.
     replies = []
     chunk_size = 100
     for i in range(0, len(email_ids), chunk_size):
         chunk = email_ids[i:i+chunk_size]
-        resp = supabase.table("email_replies").select("*").in_("sent_email_id", chunk).order("received_at", desc=True).execute()
+        resp = get_supabase().table("email_replies").select("*").in_("sent_email_id", chunk).order("received_at", desc=True).execute()
         replies.extend(resp.data)
         
     # 3. Attach the company/to_email metadata
@@ -117,7 +109,7 @@ def get_replies(user_id: str) -> list[dict]:
     return replies
 
 def update_reply(reply_id: str, **fields):
-    supabase.table("email_replies").update(fields).eq("id", reply_id).execute()
+    get_supabase().table("email_replies").update(fields).eq("id", reply_id).execute()
 
 # ── Job Board Scraper ─────────────────────────────────────
 
@@ -134,22 +126,22 @@ def save_job(title: str, company: str, location: str, url: str, description: str
     }
     try:
         # insert; if URL already exists, PostgreSQL will throw a duplicate key error which we catch
-        supabase.table("scraped_jobs").insert(data).execute()
+        get_supabase().table("scraped_jobs").insert(data).execute()
     except Exception:
         pass
 
 def get_jobs() -> list[dict]:
-    response = supabase.table("scraped_jobs").select("*").order("scraped_at", desc=True).execute()
+    response = get_supabase().table("scraped_jobs").select("*").order("scraped_at", desc=True).execute()
     return response.data
 
 # ── Skipped Companies ─────────────────────────────────────
 
 def skip_company(user_id: str, company: str):
     try:
-        supabase.table("skipped_companies").insert({"user_id": user_id, "company": company}).execute()
+        get_supabase().table("skipped_companies").insert({"user_id": user_id, "company": company}).execute()
     except Exception:
         pass
 
 def get_skipped_companies(user_id: str) -> list[str]:
-    response = supabase.table("skipped_companies").select("company").eq("user_id", user_id).execute()
+    response = get_supabase().table("skipped_companies").select("company").eq("user_id", user_id).execute()
     return [r["company"] for r in response.data]
