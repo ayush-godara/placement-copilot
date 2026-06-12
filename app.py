@@ -961,15 +961,17 @@ def main():
     if not st.session_state.get("user_id"):
         if not st.session_state.get("explicitly_logged_out"):
             # Auto-login if there is exactly one user registered (ideal for local single-user apps)
-            from utils.database import get_connection
-            conn = get_connection()
-            users = conn.execute("SELECT id FROM users LIMIT 2").fetchall()
-            conn.close()
-            
-            if len(users) == 1:
-                st.session_state["user_id"] = users[0][0]
-                st.rerun()
-                return
+            from utils.database import get_supabase
+            try:
+                response = get_supabase().table("users").select("id").limit(2).execute()
+                users = response.data
+                
+                if len(users) == 1:
+                    st.session_state["user_id"] = users[0]["id"]
+                    st.rerun()
+                    return
+            except Exception:
+                pass
                 
         render_auth_page()
         return
