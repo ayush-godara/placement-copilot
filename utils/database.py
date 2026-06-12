@@ -121,7 +121,7 @@ def update_reply(reply_id: str, **fields):
 
 # ── Job Board Scraper ─────────────────────────────────────
 
-def save_scraped_job(title: str, company: str, location: str, url: str, description: str, source: str):
+def save_job(title: str, company: str, location: str, url: str, description: str, source: str):
     jid = str(uuid.uuid4())
     data = {
         "id": jid,
@@ -138,7 +138,7 @@ def save_scraped_job(title: str, company: str, location: str, url: str, descript
     except Exception:
         pass
 
-def get_scraped_jobs() -> list[dict]:
+def get_jobs() -> list[dict]:
     response = supabase.table("scraped_jobs").select("*").order("scraped_at", desc=True).execute()
     return response.data
 
